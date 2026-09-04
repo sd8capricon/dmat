@@ -9,11 +9,11 @@ application code here — the repository consists entirely of three Claude Code
 skills (`.claude/skills/*`) that procedurally generate self-contained HTML
 practice-question files for three dMAT question types:
 
-- **figure-sequence-generator** → `FS-<total>-<yymmdd>.html` — 4×4 matrices of
+- **figure-sequence-generator** → `FS-<yymmdd>-<total>.html` — 4×4 matrices of
   shapes that move/rotate/change colour across a sequence.
-- **latin-square-generator** → `LS-<total>-<yymmdd>.html` — 5×5 grids (letters
+- **latin-square-generator** → `LS-<yymmdd>-<total>.html` — 5×5 grids (letters
   A–E) with one marked cell to deduce.
-- **math-equation-generator** → `ME-<total>-<yymmdd>.html` — systems of 2–4
+- **math-equation-generator** → `ME-<yymmdd>-<total>.html` — systems of 2–4
   equations in unknowns A–D.
 
 Generated `.html` files are saved to the project root and are the actual
@@ -41,9 +41,9 @@ search — see each skill for details).
 - Run generators with `python3` (no dependencies beyond the standard
   library), e.g.:
   ```
-  python3 .claude/skills/figure-sequence-generator/scripts/generate_fs.py --easy 5 --medium 5 --hard 5 --out FS-15-260902.html
-  python3 .claude/skills/latin-square-generator/scripts/generate_ls.py --easy 5 --medium 5 --hard 5 --out LS-15-260902.html
-  python3 .claude/skills/math-equation-generator/scripts/generate_me.py --easy 5 --medium 5 --hard 5 --out ME-15-260902.html
+  python3 .claude/skills/figure-sequence-generator/scripts/generate_fs.py --easy 5 --medium 5 --hard 5 --out FS-260902-15.html
+  python3 .claude/skills/latin-square-generator/scripts/generate_ls.py --easy 5 --medium 5 --hard 5 --out LS-260902-15.html
+  python3 .claude/skills/math-equation-generator/scripts/generate_me.py --easy 5 --medium 5 --hard 5 --out ME-260902-15.html
   ```
   Omit any `--easy/--medium/--hard` flag that would be 0. Only pass `--seed`
   when the user explicitly wants reproducible output.

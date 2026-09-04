@@ -57,7 +57,7 @@ tiers.
 
 ## Step 2 — Compute the output filename
 
-Format: **`LS-<total-questions>-<yymmdd>.html`** (e.g. `LS-20-260902.html`),
+Format: **`LS-<yymmdd>-<total-questions>.html`** (e.g. `LS-260902-20.html`),
 using **today's date**. Save it in the project root (the directory the user
 is working in) unless they specify otherwise. Do not overwrite an existing
 file with the same name from the same day without confirming — append `-2`,
