@@ -9,8 +9,8 @@ change, verify that the two files remain byte-for-byte identical.
 ## What this repository is
 
 A dMAT (a standardized reasoning admissions test) exam-prep project. There is no
-application code here — the repository consists of Claude Code skills
-(`.claude/skills/*`) that procedurally generate self-contained HTML
+application code here — the repository consists of Claude Code/Codex skills
+(`.claude/skills/*`, mirrored at `.agents/skills/*`) that procedurally generate self-contained HTML
 practice-question files for three dMAT question types, plus a combining skill
 and a conversational coaching agent on top of them:
 
@@ -24,7 +24,8 @@ and a conversational coaching agent on top of them:
   combines two or more of the above question types into one HTML file
   (per-type sections, continuous numbering), by calling the three generators'
   own functions directly rather than reimplementing anything.
-- **practice-coach** (`.claude/agents/practice-coach.md`, an **agent**, not a
+- **practice-coach** (`.claude/agents/practice-coach.md`, mirrored at
+  `.agents/agents/practice-coach.md`; an **agent**, not a
   skill) — conversational, session-only study coach. Talks with the user
   about goals/level/weak areas, turns that into a concrete type/tier/count
   plan, delegates all actual generation to the four skills above, and adapts
@@ -44,6 +45,11 @@ search — see each skill for details). `practice-coach` adds no new
 correctness surface of its own since it never generates a question directly.
 
 ## Working in this repo
+
+- The Codex paths under `.agents/` are symlinks to the corresponding Claude
+  paths under `.claude/`. Edit the source files under `.claude/`; do not replace
+  the symlinks with copied files. If a new agent or skill is added, add it to
+  the corresponding `.claude/` directory so both toolchains see it.
 
 - Each question type is driven by its skill (invoke via `/figure-sequence-generator`,
   `/latin-square-generator`, `/math-equation-generator`, `/mixed-exercise-generator`,
