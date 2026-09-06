@@ -26,6 +26,7 @@ If --out is omitted, the file is named LS-<total>-<yymmdd>.html in the current d
 import argparse
 import datetime
 import random
+from pathlib import Path
 
 N = 5
 LETTERS = "ABCDE"
@@ -434,6 +435,19 @@ def build_html(items, counts):
 # CLI
 # ---------------------------------------------------------------------------
 
+def next_available_path(base_name):
+    """base_name has no extension, e.g. 'LS-15-260906'. Returns the first of
+    base_name.html, base_name-2.html, base_name-3.html, ... that doesn't
+    already exist, so a second same-day request with the same total never
+    silently clobbers an earlier file."""
+    path = Path(f"{base_name}.html")
+    n = 2
+    while path.exists():
+        path = Path(f"{base_name}-{n}.html")
+        n += 1
+    return str(path)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--easy', type=int, default=0)
@@ -441,6 +455,8 @@ def main():
     ap.add_argument('--hard', type=int, default=0)
     ap.add_argument('--out', type=str, default=None)
     ap.add_argument('--seed', type=int, default=None)
+    ap.add_argument('--force', action='store_true',
+                     help='Overwrite --out if it already exists instead of refusing.')
     args = ap.parse_args()
 
     counts = {'easy': args.easy, 'medium': args.medium, 'hard': args.hard}
@@ -458,10 +474,17 @@ def main():
 
     html = build_html(items, counts)
 
-    out_path = args.out
-    if not out_path:
+    if args.out:
+        out_path = args.out
+        if Path(out_path).exists() and not args.force:
+            raise SystemExit(
+                f"{out_path} already exists. Pass --force to overwrite it "
+                f"intentionally, or drop --out (or pick a different name) to "
+                f"keep both files."
+            )
+    else:
         yymmdd = datetime.date.today().strftime('%y%m%d')
-        out_path = f"LS-{total}-{yymmdd}.html"
+        out_path = next_available_path(f"LS-{total}-{yymmdd}")
 
     with open(out_path, 'w') as f:
         f.write(html)

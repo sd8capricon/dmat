@@ -61,7 +61,10 @@ Format: **`LS-<yymmdd>-<total-questions>.html`** (e.g. `LS-260902-20.html`),
 using **today's date**. Save it in the project root (the directory the user
 is working in) unless they specify otherwise. Do not overwrite an existing
 file with the same name from the same day without confirming — append `-2`,
-`-3`, etc. if needed.
+`-3`, etc. if needed. As a safety net (not a substitute for that check),
+the script itself now also refuses to overwrite whatever `--out` path you
+give it if that file already exists — pass `--force` only after the user
+has actually confirmed they want that exact file replaced.
 
 ## Step 3 — Run the generator
 
