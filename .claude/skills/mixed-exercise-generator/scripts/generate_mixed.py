@@ -166,19 +166,28 @@ def next_available_path(base_name):
 # ---------------------------------------------------------------------------
 # HTML rendering
 # ---------------------------------------------------------------------------
-# The three sibling stylesheets share the same :root palette and the same
-# core .item/.badge/.option/.solution rules (verified while building this
-# skill); each one only *adds* selectors the others don't use (LS: --mark,
-# .puzzle-row/.lgrid/.lcell/.options-col; ME: .eqn-row/.eqn-chip/.solution
-# code). Concatenating all three verbatim is therefore safe -- duplicate
-# selectors are byte-identical restatements, not conflicts -- and keeps this
-# script from having to hand-merge (and risk drifting from) each sibling's
-# CSS. Do the same for JS: the three click-to-check snippets are byte-
-# identical, so only one copy is needed.
+# The three sibling stylesheets share the same :root palette and most of the
+# core .item/.badge/.solution rules byte-for-byte, but NOT .option/.options-row
+# /.prompt: LS/ME size .option as a small fixed-width text button (48px/56px)
+# while FS leaves it auto-width to hold a 176px shape grid. Concatenating
+# verbatim lets whichever sibling loads last (ME) win that width for every
+# section, squeezing FS's grids into a 56px box so figures spill into the
+# next option card. The scoped overrides below re-assert each type's own
+# values at higher specificity so section order can't matter. JS is still a
+# safe verbatim share -- the three click-to-check snippets are byte-identical.
 EXTRA_CSS = '''
 .type-section + .type-section{ border-top:2px solid var(--line); margin-top:40px; padding-top:8px; }
 .type-section-header h2{ margin:0 0 4px; font-size:1.4rem; }
 .type-section-header > p{ color:var(--text-dim); margin:4px 0 0; }
+.type-section-fs .option{ width:auto; padding:8px; }
+.type-section-fs .options-row{ gap:14px; }
+.type-section-fs .prompt{ margin:18px 0 10px; }
+.type-section-ls .option{ width:48px; padding:10px 0; }
+.type-section-ls .options-row{ gap:10px; }
+.type-section-ls .prompt{ margin:0 0 10px; }
+.type-section-me .option{ width:56px; padding:10px 0; }
+.type-section-me .options-row{ gap:10px; }
+.type-section-me .prompt{ margin:0 0 10px; }
 '''
 
 JS = fs.JS
@@ -188,7 +197,7 @@ def render_section(key, counts, items_html):
     meta = TYPE_META[key]
     comp = ", ".join(f"{counts[t]} {DIFF_LABEL[t]}" for t in TIERS if counts.get(t))
     return f'''
-<section class="type-section">
+<section class="type-section type-section-{key}">
   <div class="type-section-header">
     <h2>{meta['title']}</h2>
     <p>{sum(counts.values())} items ({comp}). {meta['lead']}</p>

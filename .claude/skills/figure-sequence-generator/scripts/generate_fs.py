@@ -383,7 +383,7 @@ SYMBOLS = '''
 <svg width="0" height="0" style="position:absolute">
 <defs>
 <symbol id="shape-house" viewBox="0 0 100 100"><path d="M50 6 L94 45 L94 94 L6 94 L6 45 Z"/></symbol>
-<symbol id="shape-pin" viewBox="0 0 100 100"><path d="M50 5 C63 28 85 52 85 70 A35 35 0 1 1 15 70 C15 52 37 28 50 5 Z"/></symbol>
+<symbol id="shape-pin" viewBox="0 0 100 100"><path d="M50 5 C61.6 25.5 81.2 46.8 81.2 62.9 A31.2 31.2 0 1 1 18.8 62.9 C18.8 46.8 38.4 25.5 50 5 Z"/></symbol>
 <symbol id="shape-arrow" viewBox="0 0 100 100"><path d="M50 4 L82 42 L64 42 L64 96 L36 96 L36 42 L18 42 Z"/></symbol>
 <symbol id="shape-chevron" viewBox="0 0 100 100"><path d="M50 12 L88 82 L12 82 Z"/></symbol>
 <symbol id="shape-flag" viewBox="0 0 100 100"><path d="M44 6 H56 V94 H44 Z"/><path d="M56 12 L90 30 L56 48 Z"/></symbol>

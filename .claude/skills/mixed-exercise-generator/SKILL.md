@@ -198,20 +198,32 @@ breakdown to the user.
   `SKILL.md`s run them directly as scripts) and must keep working
   standalone; this file-path loading approach is what leaves them
   completely untouched.
-- **Concatenating the three CSS blocks verbatim is intentional, not a
-  cleanup opportunity.** All three were verified (while building this
-  skill) to share byte-identical `:root` variables, `.item`/`.badge`/
-  `.option`/`.solution` rules, and to only *add* type-specific selectors on
-  top (Latin Squares adds `--mark`, `.puzzle-row`, `.lgrid`, `.lcell`,
-  `.options-col`; Mathematical Equations adds `.eqn-row`, `.eqn-chip`,
-  `.solution code`). Because repeated selectors across the three blocks
-  are identical restatements (not conflicting overrides), concatenation
-  is safe even though it's redundant. Do not hand-merge these into one
-  deduplicated stylesheet — that reintroduces exactly the kind of
-  parallel-logic drift risk this skill's design otherwise avoids: if any
-  sibling's CSS is edited later, this skill's output stays correct
-  automatically only because it re-reads that sibling's `CSS` constant at
-  generation time.
+- **Concatenating the three CSS blocks verbatim is *not* fully safe — this
+  was wrong and caused a real bug.** The original assumption here was that
+  repeated selectors across the three sibling stylesheets are
+  byte-identical restatements. That's false for `.option`, `.options-row`,
+  and `.prompt`: FS leaves `.option` auto-width (it holds a 176px 4×4 shape
+  grid) while LS/ME fix it to a small `48px`/`56px` text-button width, and
+  since concatenation order is `fs.CSS + ls.CSS + me.CSS`, ME's rule (last)
+  won that property for *every* section — squeezing FS's option grids into
+  a 56px box so figures visually spilled into the next option card. The fix
+  (already applied in `generate_mixed.py`) is scoped override CSS: each
+  section's wrapper carries a `type-section-<key>` class (e.g.
+  `type-section-fs`), and `EXTRA_CSS` re-asserts each type's own
+  `.option`/`.options-row`/`.prompt` values under `.type-section-<key> ...`
+  — higher specificity than the bare sibling selectors, so section order
+  can no longer matter. `:root` and `.item`/`.badge`/`.solution` genuinely
+  are identical (or additive, e.g. LS's `--mark`) across all three and are
+  still safe to concatenate verbatim. If a sibling's CSS changes again,
+  re-diff all three stylesheets for selectors with matching names but
+  different bodies (not just eyeballing it) before assuming a new addition
+  is conflict-free — do not restore the "verbatim concatenation is always
+  safe" assumption this replaced. Do not hand-merge everything into one
+  deduplicated stylesheet either — that reintroduces the parallel-logic
+  drift risk this skill's design otherwise avoids: this skill's output
+  should stay correct automatically because it re-reads each sibling's
+  `CSS` constant at generation time, only patching the specific selectors
+  known to conflict.
 - **The shared JS is taken from one sibling (`fs.JS`), not all three.**
   Unlike CSS, running the same `document.querySelectorAll(".options-row")`
   click-handler setup three times would attach three listeners per row.
