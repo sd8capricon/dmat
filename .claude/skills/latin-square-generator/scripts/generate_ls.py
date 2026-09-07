@@ -128,16 +128,33 @@ def chain_bullets(full, given, target, round_filled):
 
 
 def minimize_for_chain(given, rng, target):
-    """Greedily strip givens (one at a time, random order) while the target
-    remains forceable *at all*. This finds a minimal-support sparse puzzle,
-    which is what naturally produces the longer 2-3 step chains real hard
-    items use (dMAT Exercise 5/6, Nbyula's LS-050). Do NOT use this for
-    easy/medium -- it biases hard toward long chains, not toward the dense,
-    single-step look those tiers need."""
-    cells = [(r, c) for r in range(N) for c in range(N) if given[r][c] is not None and (r, c) != target]
-    rng.shuffle(cells)
+    """Greedily strip givens while the target remains forceable *at all*,
+    always attempting to remove from whichever row/column currently holds
+    the most givens (ties broken randomly). This finds a minimal-support
+    sparse puzzle, which is what naturally produces the longer stepping-stone
+    chains real hard items use (dMAT Exercise 5/6, Nbyula's LS-050) --
+    AND, just as important, actively thins out any row/column that would
+    otherwise end up left almost fully filled by chance.
+
+    An earlier version stripped in plain random order: it still reached a
+    locally-minimal given count, but had no preference for *which* cells to
+    remove, so it regularly left a couple of rows/columns 4-5/5 filled --
+    trivially readable by eye regardless of chain_len, which is exactly the
+    "looks dense/easy despite being tagged hard" bug this was rewritten to
+    fix. Always removing from the densest line first spreads the remaining
+    givens out instead. Do NOT use this for easy/medium -- it biases hard
+    toward long chains and an even spread, not toward the dense, single-step
+    look those tiers need."""
     given = [row[:] for row in given]
-    for (r, c) in cells:
+    remaining = {(r, c) for r in range(N) for c in range(N)
+                 if given[r][c] is not None and (r, c) != target}
+    while remaining:
+        row_count = [sum(1 for c in range(N) if given[r][c] is not None) for r in range(N)]
+        col_count = [sum(1 for r in range(N) if given[r][c] is not None) for c in range(N)]
+        best = max(row_count[r] + col_count[c] for (r, c) in remaining)
+        tied = [(r, c) for (r, c) in remaining if row_count[r] + col_count[c] == best]
+        r, c = rng.choice(tied)
+        remaining.discard((r, c))
         val = given[r][c]
         given[r][c] = None
         ok, _ = target_forced(given, target)
@@ -164,15 +181,17 @@ def random_reveal(full, rng, target, k):
 #             but one (dMAT's "one-step read"; Exercise 1/2 style).
 #   medium -> 1: exactly one other cell must be resolved first ("two
 #             candidates, one deduction"; Exercise 3/4, Nbyula LS-025 style).
-#   hard   -> 2 or 3: a genuine multi-step chain (Exercise 5/6, Nbyula
-#             LS-050 "chain of three" style).
+#   hard   -> 3 or 4: a genuine multi-step chain (Exercise 5/6, Nbyula
+#             LS-050 "chain of three" style, pushed one notch deeper since
+#             2 was proving too shallow once givens were spread out evenly
+#             instead of clustering into near-complete rows/columns).
 # given_range is the *displayed* clue count and is what actually produces the
 # tier's look: easy grids read as "mostly filled in", hard grids read as
 # sparse. It is a visual/difficulty signal independent of chain_len.
 TIERS = {
     'easy':   dict(chain_lens={0}, given_range=(13, 17), use_minimize=False),
     'medium': dict(chain_lens={1}, given_range=(9, 13),  use_minimize=False),
-    'hard':   dict(chain_lens={2, 3}, given_range=(7, 11), use_minimize=True),
+    'hard':   dict(chain_lens={3, 4}, given_range=(7, 11), use_minimize=True),
 }
 
 

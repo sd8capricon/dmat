@@ -155,6 +155,28 @@ a number on its own" — hard items never offer a free read-off, hence
 `chain_prob = 0` for hard. Low/medium items are a genuine mix of both in the
 source material, hence the ~50/50 and ~65/35 splits.
 
+**Hard's anchor mode is additionally "chained", not just anchor-based**
+(`anchor_chain: True` in `TIERS['hard']`, consumed by `build_anchor_system`'s
+`chain_express` param). The original implementation expressed all 3
+non-anchor letters directly in terms of the anchor (3 independent one-hop
+equations + a collapse) — that made the anchor trivially easy to spot (every
+equation literally contains it) and the "hard" tier only harder than medium
+by virtue of having one more letter, not by requiring deeper reasoning. Now
+only the *first* letter in a shuffled chain is expressed directly from the
+anchor; each subsequent letter is expressed in terms of the *previous* letter
+in the chain (anchor → L1 → L2 → L3), so at most one equation mentions the
+anchor at all — solving requires folding L3 into L2 into L1 into the anchor
+before the collapse equation is even reachable. Links after the first are
+built with `allow_scale=False` (pure integer offset, no ×2/×3) so the
+anchor's composed coefficient in the collapsed equation doesn't compound
+into unwieldy numbers across 2-3 hops; only the anchor→L1 link may carry a
+scale, matching the non-chain distribution. This only applies to hard
+(4 unknowns) — medium's anchor-mode items (when `chain_prob` doesn't pick
+chain mode) keep the original direct-to-anchor construction, since 3
+non-anchor letters isn't where the "too easy to spot" problem showed up. If
+asked to make hard tougher again, prefer adjusting `anchor_chain` chain
+depth/scale rules here over reverting to direct-to-anchor.
+
 If asked to adjust difficulty balance, edit `TIERS` in `generate_me.py`
 rather than hand-writing new question logic in the conversation.
 

@@ -120,7 +120,7 @@ Report the final file path and question-count breakdown to the user.
 |--------|-------------------------------|---------------------------|---------------------------------------------|
 | Easy   | 0 | 13–17 (dense)  | dMAT prep materials Exercise 1/2 ("low"); Nbyula's "one-step read" (LS-001) |
 | Medium | 1 | 9–13 (moderate) | dMAT prep materials Exercise 3/4 ("medium"); Nbyula's "two candidates, one deduction" (LS-025) |
-| Hard   | 2–3 | 7–11 (sparse) | dMAT prep materials Exercise 5/6 ("high"); Nbyula's "chain of three, sparse grid" (LS-050) |
+| Hard   | 3–4 | 7–11 (sparse) | dMAT prep materials Exercise 5/6 ("high"); Nbyula's "chain of three, sparse grid" (LS-050) |
 
 `chain_len` is the number of *other* cells that must be resolved by pure
 row/column elimination before the marked cell itself becomes forced — this
@@ -181,6 +181,29 @@ question logic in the conversation.
   doesn't match the tier; this is what keeps easy grids looking dense and
   medium grids looking moderately filled, matching the official materials'
   visual style at each tier.
+- **`minimize_for_chain` always strips from the currently densest row/column
+  first, not in plain random order.** An earlier version removed candidate
+  givens in random order — it still reached a locally-minimal support set
+  (same `n_given`, same `given_range`), but had no preference for *which*
+  cells to strip, so it regularly left one or two rows/columns 4-5/5 filled
+  purely by chance. A row that's 4/5 filled is trivially readable by eye
+  regardless of `chain_len` — this is exactly how a `hard`-tagged item ended
+  up looking dense/easy (two whole rows nearly complete) despite reporting a
+  legitimate 2-step chain. The fix (already in the script) always removes
+  next from whichever row+column pair currently holds the most givens (ties
+  broken randomly), which spreads the remaining givens out instead of
+  letting them cluster. Do not revert to plain-random stripping order to
+  "simplify" this function — the ordering is the fix, not a cosmetic detail.
+- **Hard's `chain_lens` is `{3, 4}`, not `{2, 3}`.** Once the clustering bug
+  above was fixed and givens actually spread evenly across the grid, a
+  2-step chain read as too easy in practice (see the anti-clustering fix
+  above — before that fix, a 2-step chain could hide behind a
+  dense-looking grid and feel harder than it was; once the grid is
+  genuinely sparse and evenly spread, 2 steps resolves too quickly). If
+  asked to make hard tougher still, prefer raising this further (verify `4`
+  is still reliably reachable within `max_targets`/`max_attempts` first —
+  it gets rarer as you push toward the top of a 5x5 grid's real ceiling)
+  over re-introducing artificial clutter.
 - **Soundness is automatic, not something to double-check separately.**
   Because every reveal is a genuine subset of an actual solved Latin square,
   any letter that elimination narrows down to a single candidate *must* be

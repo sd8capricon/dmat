@@ -59,7 +59,7 @@ LETTERS_POOL = ['A', 'B', 'C', 'D']
 TIERS = {
     'easy':   dict(n_unknowns=2, chain_prob=0.65),
     'medium': dict(n_unknowns=3, chain_prob=0.50),
-    'hard':   dict(n_unknowns=4, chain_prob=0.0),
+    'hard':   dict(n_unknowns=4, chain_prob=0.0, anchor_chain=True),
 }
 
 DIFF_LABEL = {'easy': 'Easy', 'medium': 'Medium', 'hard': 'Hard'}
@@ -155,33 +155,51 @@ def pairwise_link_equation(new_v, ref_v, t_new, t_ref, rng):
     return {'text': text, 'vars': {new_v, ref_v}, 'check': check}
 
 
-def pairwise_express_equation(new_v, anchor_v, t_new, t_anchor, rng):
+def pairwise_express_equation(new_v, ref_v, t_new, t_ref, rng, allow_scale=True):
     """One equation expressing new_v as an exact integer-affine function of
-    anchor_v: new_v = m * anchor_v + b. Used for anchor mode. Restricted to
-    integer (m, b) -- unlike pairwise_link_equation above, this value feeds
-    into a symbolic collapse later, so a fractional coefficient here would
-    make that collapse messy/unverifiable by hand. This is a deliberate,
-    documented simplification (see SKILL.md); it costs some of the
-    division-flavoured equations real items show, in exchange for a
-    guaranteed-clean "tidies to K x anchor + B = total" narrative line."""
-    m = rng.choice([2, 3]) if rng.random() < 0.35 else 1
-    b = t_new - m * t_anchor
+    ref_v: new_v = m * ref_v + b. Used for anchor mode. ref_v is usually the
+    anchor itself, but in hard-tier "chained" anchor systems (see
+    build_anchor_system) it may instead be another already-expressed
+    non-anchor letter -- the math is identical either way, only the display
+    label differs. Restricted to integer (m, b) -- unlike
+    pairwise_link_equation above, this value feeds into a symbolic collapse
+    later, so a fractional coefficient here would make that collapse
+    messy/unverifiable by hand. This is a deliberate, documented
+    simplification (see SKILL.md); it costs some of the division-flavoured
+    equations real items show, in exchange for a guaranteed-clean "tidies to
+    K x anchor + B = total" narrative line. allow_scale=False forces m=1
+    (pure offset link) -- used for later links in a hard-tier chain so the
+    anchor's effective coefficient doesn't compound into unwieldy numbers
+    across 2-3 hops."""
+    m = (rng.choice([2, 3]) if rng.random() < 0.35 else 1) if allow_scale else 1
+    b = t_new - m * t_ref
     if m == 1:
         if b > 0:
-            text = f"{anchor_v} + {b} = {new_v}"
+            text = f"{ref_v} + {b} = {new_v}"
         elif b < 0:
-            text = f"{new_v} + {-b} = {anchor_v}"
+            text = f"{new_v} + {-b} = {ref_v}"
         else:
-            text = f"{anchor_v} = {new_v}"
+            text = f"{ref_v} = {new_v}"
     else:
         if b > 0:
-            text = f"{m} × {anchor_v} + {b} = {new_v}"
+            text = f"{m} × {ref_v} + {b} = {new_v}"
         elif b < 0:
-            text = f"{m} × {anchor_v} - {-b} = {new_v}"
+            text = f"{m} × {ref_v} - {-b} = {new_v}"
         else:
-            text = f"{m} × {anchor_v} = {new_v}"
-    check = (lambda val, a=new_v, b_=anchor_v, m=m, c=b: m * val[b_] + c == val[a])
-    return {'text': text, 'vars': {new_v, anchor_v}, 'check': check}, m, b
+            text = f"{m} × {ref_v} = {new_v}"
+    check = (lambda val, a=new_v, b_=ref_v, m=m, c=b: m * val[b_] + c == val[a])
+    return {'text': text, 'vars': {new_v, ref_v}, 'check': check}, m, b
+
+
+def format_affine(m, b, var):
+    """Render m*var+b as e.g. '3 × A + 5' / 'A - 2' / 'A'. Shared by both the
+    direct express-step narrative and the chained-composition narrative."""
+    core = var if m == 1 else f"{m} × {var}"
+    if b > 0:
+        return f"{core} + {b}"
+    if b < 0:
+        return f"{core} - {-b}"
+    return core
 
 
 def collapse_equation(letters, targets, rng):
@@ -235,20 +253,48 @@ def build_chain_system(letters, targets, rng):
     return equations, {'mode': 'chain', 'steps': steps}
 
 
-def build_anchor_system(letters, targets, rng, max_attempts=60):
+def build_anchor_system(letters, targets, rng, chain_express=False, max_attempts=60):
+    """chain_express=False (easy/medium): every non-anchor letter is
+    expressed directly in terms of the anchor, as before -- 3 (or 2)
+    independent one-hop equations, then a collapse.
+
+    chain_express=True (hard): only the *first* non-anchor letter in a
+    shuffled order is expressed directly in terms of the anchor; every
+    subsequent letter is expressed in terms of the *previous* letter in that
+    chain, not the anchor itself (anchor -> L1 -> L2 -> L3). This is the
+    calibration fix for hard/4-unknown items: previously all 3 non-anchor
+    letters pointed straight at the anchor, so spotting + solving the anchor
+    was a one-hop read for every equation -- barely harder than medium. Now
+    at most one equation mentions the anchor directly; the other two require
+    genuine multi-step substitution (fold L3 into L2, then into L1, then
+    into the anchor) before the final collapse equation can even be reached.
+    Later links in the chain are built with allow_scale=False (pure integer
+    offset, no ×2/×3) so the anchor's effective coefficient in the collapsed
+    equation doesn't compound into unwieldy numbers across 2-3 hops -- only
+    the first link (anchor -> L1) may carry a ×2/×3 scale, matching the
+    non-chain distribution."""
     for _ in range(max_attempts):
         anchor = rng.choice(letters)
         others = [l for l in letters if l != anchor]
+        if chain_express:
+            rng.shuffle(others)
         equations = []
-        express = []  # (var, m, b, eq)
+        express = []  # (var, ref, m, b, eq) -- ref is anchor, or (chain mode) the previous link
+        composed = {anchor: (1, 0)}  # var -> (M, B) such that var = M*anchor + B
         ok = True
-        for v in others:
-            eq, m, b = pairwise_express_equation(v, anchor, targets[v], targets[anchor], rng)
+        prev = anchor
+        for i, v in enumerate(others):
+            ref = prev if chain_express else anchor
+            allow_scale = (not chain_express) or i == 0
+            eq, m, b = pairwise_express_equation(v, ref, targets[v], targets[ref], rng, allow_scale=allow_scale)
             equations.append(eq)
-            express.append((v, m, b, eq))
+            express.append((v, ref, m, b, eq))
+            M_ref, B_ref = composed[ref]
+            composed[v] = (m * M_ref, m * B_ref + b)
+            prev = v
         coll_eq, weights, total = collapse_equation(letters, targets, rng)
-        K = weights[anchor] + sum(weights[v] * m for (v, m, b, _e) in express)
-        B = sum(weights[v] * b for (v, m, b, _e) in express)
+        K = weights[anchor] + sum(weights[v] * composed[v][0] for v in others)
+        B = sum(weights[v] * composed[v][1] for v in others)
         if K == 0:
             ok = False
         equations.append(coll_eq)
@@ -257,6 +303,7 @@ def build_anchor_system(letters, targets, rng, max_attempts=60):
         rng.shuffle(equations)
         steps = {
             'mode': 'anchor', 'anchor': anchor, 'express': express,
+            'chain': chain_express, 'composed': composed, 'order': others,
             'collapse_text': coll_eq['text'], 'K': K, 'B': B, 'total': total,
         }
         return equations, steps
@@ -274,7 +321,8 @@ def build_item(tier, rng, max_attempts=200):
             if use_chain:
                 equations, narrative = build_chain_system(letters, targets, rng)
             else:
-                equations, narrative = build_anchor_system(letters, targets, rng)
+                equations, narrative = build_anchor_system(
+                    letters, targets, rng, chain_express=cfg.get('anchor_chain', False))
         except RuntimeError:
             continue
         if validate_unique(letters, equations, targets):
@@ -329,19 +377,25 @@ def render_narrative(letters, targets, narrative, asked):
             )
     else:
         anchor = narrative['anchor']
-        n_eqs = len(narrative['express']) + 1
-        paras.append(
-            f"<p>No equation has a single unknown. {anchor} appears in every equation that matters here, "
-            f"so anchor on {anchor}.</p>"
-        )
-        for (v, m, b, eq) in narrative['express']:
-            expr = (f"{anchor}" if (m == 1 and b == 0) else
-                    f"{m} × {anchor}" if b == 0 else
-                    f"{anchor} + {b}" if m == 1 and b > 0 else
-                    f"{anchor} - {-b}" if m == 1 and b < 0 else
-                    f"{m} × {anchor} + {b}" if b > 0 else
-                    f"{m} × {anchor} - {-b}")
+        is_chain = narrative.get('chain', False)
+        if is_chain:
+            paras.append(
+                f"<p>No equation has a single unknown, and the letters chain through each other rather than "
+                f"all pointing straight at {anchor} &mdash; only one equation mentions {anchor} directly. "
+                f"Work through the chain one link at a time, then fold everything back to {anchor}.</p>"
+            )
+        else:
+            paras.append(
+                f"<p>No equation has a single unknown. {anchor} appears in every equation that matters here, "
+                f"so anchor on {anchor}.</p>"
+            )
+        for (v, ref, m, b, eq) in narrative['express']:
+            expr = format_affine(m, b, ref)
             paras.append(f"<p>From <code>{eq['text']}</code>: {v} = {expr}. Nothing to compute yet &mdash; just carry it.</p>")
+        if is_chain:
+            composed = narrative['composed']
+            chain_lines = [f"{v} = {format_affine(*composed[v], anchor)}" for v in narrative['order']]
+            paras.append(f"<p>Chaining these back to {anchor}: {', '.join(chain_lines)}.</p>")
         K, B, total = narrative['K'], narrative['B'], narrative['total']
         rhs = total - B
         tidy = f"{K} × {anchor}" + (f" + {B}" if B > 0 else f" - {-B}" if B < 0 else "") + f" = {total}"
@@ -350,7 +404,7 @@ def render_narrative(letters, targets, narrative, asked):
             f"<code>{tidy}</code>. That pins it: {anchor} = {rhs} / {K} = {targets[anchor]}.</p>"
         )
         unwinds = []
-        for (v, m, b, eq) in narrative['express']:
+        for (v, ref, m, b, eq) in narrative['express']:
             unwinds.append(f"{v} = {targets[v]}")
         if unwinds:
             paras.append(f"<p>Unwind: {', '.join(unwinds)}.</p>")
