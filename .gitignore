@@ -11,3 +11,9 @@ __pycache__/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Generated practice question files
+FS-*.html
+LS-*.html
+ME-*.html
+Mixed-*.html
