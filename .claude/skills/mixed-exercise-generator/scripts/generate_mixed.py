@@ -190,7 +190,7 @@ EXTRA_CSS = '''
 .type-section-me .prompt{ margin:0 0 10px; }
 '''
 
-JS = fs.JS
+JS = fs.JS + fs.TIMER_JS
 
 
 def render_section(key, counts, items_html):
@@ -217,7 +217,7 @@ def build_html(sections, type_counts):
         f"{sum(type_counts[k].values())} {TYPE_META[k]['title']}"
         for k in ('fs', 'ls', 'me') if k in sections
     )
-    css = fs.CSS + ls.CSS + me.CSS + EXTRA_CSS
+    css = fs.CSS + ls.CSS + me.CSS + EXTRA_CSS + fs.TIMER_CSS
     symbols = fs.SYMBOLS if 'fs' in sections else ''
     body = "".join(
         render_section(k, type_counts[k], sections[k])
@@ -233,9 +233,16 @@ def build_html(sections, type_counts):
 </head>
 <body>
 {symbols}
+{fs.render_timer_bar(total)}
 <header class="page-header">
   <h1>Mixed Practice Set</h1>
   <p>{total} items ({type_comp}), in the dMAT Core Module format. Sections are grouped by question type; within each section, questions run easiest to hardest.</p>
+  <div class="instructions">
+    <strong>Timer:</strong>
+    <ul>
+      <li>Timer budget: {fs.SECONDS_PER_QUESTION}s per question ({fs.format_mmss(total * fs.SECONDS_PER_QUESTION)} total for this set), shown at the top of the page. Press <strong>Start</strong> when you begin, <strong>Lap</strong> after each question to log your split, <strong>Pause</strong> to hold, and <strong>Reset</strong> to start over &mdash; it's a pacing guide only and won't lock you out at zero.</li>
+    </ul>
+  </div>
 </header>
 <main>
 {body}

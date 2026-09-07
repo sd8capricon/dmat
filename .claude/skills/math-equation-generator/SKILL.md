@@ -128,7 +128,9 @@ print("ok", len(items))
 Then open the file (or spot-check the raw HTML) and confirm at least one
 "Show answer & reasoning" panel expands independently of the others (native
 `<details>` — no extra JS needed for that part) and that the reasoning text
-reads coherently against the equations shown.
+reads coherently against the equations shown. Also confirm the pacing
+timer's `data-total-seconds` attribute equals `<total items> &times; 75`
+(e.g. `grep -o 'data-total-seconds="[0-9]*"' <filename>.html`).
 
 Report the final file path and question-count breakdown to the user.
 
@@ -224,6 +226,19 @@ rather than hand-writing new question logic in the conversation.
   `badge-easy/medium/hard` colours) for visual/interaction consistency
   across every generated practice file in this project. Keep it unless the
   user asks for plain static output.
+- **Cumulative pacing timer, 75s/question**: every generated file shows a
+  sticky top bar with a countdown starting at `<total items> &times; 75s`
+  (e.g. 2 questions &rarr; 2:30 total) and Start / Pause / Lap / Reset
+  controls — Lap logs the time since the previous lap as one question's
+  split (flagged red if over 75s) without stopping the overall countdown;
+  Reset clears everything back to the full budget. It never blocks
+  answering after hitting zero — purely a pacing aid. The CSS/JS/markup for
+  this (`TIMER_CSS`, `TIMER_JS`, `render_timer_bar`, `format_mmss`,
+  `SECONDS_PER_QUESTION`) is defined once in the sibling
+  `figure-sequence-generator/scripts/generate_fs.py` and copied
+  byte-identical into this script and `latin-square-generator`'s (same
+  convention already used for the answer-check CSS/JS) — edit the `fs` copy
+  first and re-copy into the others if it ever needs to change.
 
 ## Files
 

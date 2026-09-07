@@ -82,6 +82,8 @@ Render the HTML (e.g. headless-screenshot it, or open it) and spot-check:
 - At least one "Show answer & reasoning" panel expands to readable,
   per-figure position/orientation/colour rule text, independently of the
   others (native `<details>` — no extra JS needed for that part).
+- The pacing timer's `data-total-seconds` attribute equals `<total items>
+  &times; 75` (e.g. `grep -o 'data-total-seconds="[0-9]*"' <filename>.html`).
 
 Report the final file path and question-count breakdown to the user.
 
@@ -157,6 +159,20 @@ than hand-writing new question logic in the conversation.
   use a native `<details>`/`<summary>` element per question — this gets
   "collapsed by default, expand one without affecting others" for free with
   no JS, and is what the script already does.
+- **Cumulative pacing timer, 75s/question**: every generated file shows a
+  sticky top bar with a countdown starting at `<total items> &times; 75s`
+  (e.g. 2 questions &rarr; 2:30 total) and Start / Pause / Lap / Reset
+  controls — Lap logs the time since the previous lap as one question's
+  split (flagged red if over 75s) without stopping the overall countdown;
+  Reset clears everything back to the full budget. It never blocks
+  answering after hitting zero — purely a pacing aid. `TIMER_CSS`,
+  `TIMER_JS`, `render_timer_bar`, `format_mmss` and `SECONDS_PER_QUESTION`
+  live in this script and are copied byte-identical into
+  `latin-square-generator`'s and `math-equation-generator`'s scripts (same
+  convention already used for the answer-check CSS/JS), and reused as-is
+  (imported, not re-derived) by `mixed-exercise-generator`. This is the
+  canonical copy — edit here first and re-copy into the siblings if it ever
+  needs to change.
 
 ## Files
 

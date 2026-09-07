@@ -427,6 +427,145 @@ document.querySelectorAll(".options-row").forEach(function(row){
 });
 '''
 
+# ---------------------------------------------------------------------------
+# Cumulative pacing timer (75s/question budget) -- kept byte-identical with
+# the copy in figure-sequence-generator/scripts/generate_fs.py (and reused
+# as-is by mixed-exercise-generator via that module). Never re-derive this
+# logic here; extend the fs copy and re-copy if it ever needs to change.
+# ---------------------------------------------------------------------------
+SECONDS_PER_QUESTION = 75
+
+TIMER_CSS = '''
+.timer-bar{ position:sticky; top:0; z-index:50; background:var(--panel); border-bottom:1px solid var(--line);
+  box-shadow:0 1px 4px rgba(20,25,40,.08); }
+.timer-main{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  padding:10px 24px; }
+.timer-label{ font-size:.92rem; color:var(--text-dim); }
+.timer-label strong{ font-variant-numeric:tabular-nums; font-size:1.05rem; color:var(--text); margin-left:4px; }
+.timer-controls{ display:flex; gap:8px; }
+.timer-controls button{ background:var(--panel2); border:1px solid var(--line); border-radius:6px;
+  padding:5px 14px; font-size:.85rem; color:var(--text); cursor:pointer; min-width:64px; }
+.timer-controls button:hover{ border-color:var(--accent); }
+.timer-bar.timer-warn .timer-label strong{ color:var(--bad); }
+.timer-bar.timer-up{ background:rgba(209,59,52,.10); }
+.timer-bar.timer-up .timer-label strong{ color:var(--bad); }
+.timer-laps{ display:flex; gap:6px; overflow-x:auto; padding:0 24px 10px; }
+.timer-laps[hidden]{ display:none; }
+.timer-lap-chip{ flex:0 0 auto; background:var(--panel2); border:1px solid var(--line); border-radius:999px;
+  padding:3px 10px; font-size:.78rem; color:var(--text-dim); font-variant-numeric:tabular-nums; }
+.timer-lap-chip.timer-lap-over{ color:var(--bad); border-color:rgba(209,59,52,.4); background:rgba(209,59,52,.08); }
+'''
+
+TIMER_JS = '''
+(function(){
+  var bar = document.getElementById("timer-bar");
+  if(!bar) return;
+  var totalSeconds = parseInt(bar.dataset.totalSeconds, 10) || 0;
+  var display = document.getElementById("timer-display");
+  var lapResetBtn = document.getElementById("timer-lap-reset");
+  var startPauseBtn = document.getElementById("timer-start-pause");
+  var lapsEl = document.getElementById("timer-laps");
+
+  var remaining = totalSeconds;
+  var running = false;
+  var timerId = null;
+  var lapCount = 0;
+  var lastLapElapsed = 0;
+
+  function fmt(s){
+    s = Math.max(0, Math.round(s));
+    var m = Math.floor(s / 60);
+    var sec = s % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (sec < 10 ? "0" : "") + sec;
+  }
+
+  function render(){
+    display.textContent = fmt(remaining);
+    var warn = totalSeconds > 0 && remaining > 0 && remaining <= totalSeconds * 0.2;
+    bar.classList.toggle("timer-warn", warn);
+    bar.classList.toggle("timer-up", remaining <= 0);
+    lapResetBtn.textContent = running ? "Lap" : "Reset";
+    startPauseBtn.textContent = running ? "Pause" : "Start";
+  }
+
+  function pause(){
+    running = false;
+    if(timerId){ clearInterval(timerId); timerId = null; }
+    render();
+  }
+
+  function tick(){
+    remaining -= 1;
+    if(remaining <= 0){
+      remaining = 0;
+      pause();
+    }
+    render();
+  }
+
+  function start(){
+    if(running || remaining <= 0) return;
+    running = true;
+    timerId = setInterval(tick, 1000);
+    render();
+  }
+
+  function addLap(){
+    var elapsed = totalSeconds - remaining;
+    var lapDuration = elapsed - lastLapElapsed;
+    lastLapElapsed = elapsed;
+    lapCount += 1;
+    var chip = document.createElement("span");
+    chip.className = "timer-lap-chip" + (lapDuration > 75 ? " timer-lap-over" : "");
+    chip.textContent = "Q" + lapCount + ": " + fmt(lapDuration);
+    lapsEl.appendChild(chip);
+    lapsEl.hidden = false;
+    lapsEl.scrollLeft = lapsEl.scrollWidth;
+  }
+
+  function reset(){
+    pause();
+    remaining = totalSeconds;
+    lapCount = 0;
+    lastLapElapsed = 0;
+    lapsEl.innerHTML = "";
+    lapsEl.hidden = true;
+    render();
+  }
+
+  startPauseBtn.addEventListener("click", function(){
+    if(running) pause(); else start();
+  });
+  lapResetBtn.addEventListener("click", function(){
+    if(running) addLap(); else reset();
+  });
+
+  render();
+})();
+'''
+
+
+def format_mmss(total_seconds):
+    total_seconds = max(0, total_seconds)
+    mins, secs = divmod(total_seconds, 60)
+    return f"{mins:02d}:{secs:02d}"
+
+
+def render_timer_bar(total_questions):
+    total_seconds = max(total_questions, 0) * SECONDS_PER_QUESTION
+    return f'''
+<div class="timer-bar" id="timer-bar" data-total-seconds="{total_seconds}">
+  <div class="timer-main">
+    <div class="timer-label">Time budget: {total_questions} &times; {SECONDS_PER_QUESTION}s = <strong id="timer-display">{format_mmss(total_seconds)}</strong></div>
+    <div class="timer-controls">
+      <button type="button" id="timer-lap-reset">Reset</button>
+      <button type="button" id="timer-start-pause">Start</button>
+    </div>
+  </div>
+  <div class="timer-laps" id="timer-laps" hidden></div>
+</div>
+'''
+
 
 def render_item(idx, tier, letters, targets, equations, narrative, rng):
     n = len(letters)
@@ -471,9 +610,10 @@ def build_html(items_by_tier_order, counts):
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>dMAT Mathematical Equations &mdash; {total} Questions</title>
-<style>{CSS}</style>
+<style>{CSS}{TIMER_CSS}</style>
 </head>
 <body>
+{render_timer_bar(total)}
 <header class="page-header">
   <h1>Mathematical Equations Practice Set</h1>
   <p>{total} items ({comp}), in the dMAT Core Module format. Each item is a system of equations (2 unknowns for Easy, 3 for Medium, 4 for Hard) using the letters A&ndash;D.</p>
@@ -484,6 +624,7 @@ def build_html(items_by_tier_order, counts):
       <li>Operators are +, &minus;, &times; and &divide;. Work entirely in your head &mdash; no calculator, no notes.</li>
       <li>If one equation has only a single unknown, read it off first and substitute forward.</li>
       <li>If no equation offers a single unknown, pick the letter that appears in the most equations as your anchor, write every other letter as an expression in that anchor, then solve the one equation that collapses to the anchor alone.</li>
+      <li>Timer budget: {SECONDS_PER_QUESTION}s per question ({format_mmss(total * SECONDS_PER_QUESTION)} total for this set). Press <strong>Start</strong> at the top when you begin, <strong>Lap</strong> after each question to log your split, <strong>Pause</strong> to hold, and <strong>Reset</strong> to start over &mdash; it's a pacing guide only and won't lock you out at zero.</li>
     </ul>
   </div>
 </header>
@@ -491,7 +632,7 @@ def build_html(items_by_tier_order, counts):
 {items_html}
 </main>
 <footer>Generated practice material &mdash; not official dMAT content. Verify against the official prep materials before relying on it.</footer>
-<script>{JS}</script>
+<script>{JS}{TIMER_JS}</script>
 </body>
 </html>
 '''

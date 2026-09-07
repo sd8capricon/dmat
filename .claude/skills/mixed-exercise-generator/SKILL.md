@@ -162,7 +162,10 @@ for every requested type are present and only those, each section's own
 "Show answer" panels expand independently (native `<details>`, no extra JS
 needed), and — for any Figure Sequence section — a visual spot-check that
 figures don't overlap in any matrix, matching that sibling skill's own
-Step 4.
+Step 4. Also confirm the single, file-wide pacing timer's
+`data-total-seconds` attribute equals `<total items across all sections>
+&times; 75` (e.g. `grep -o 'data-total-seconds="[0-9]*"' <filename>.html`)
+— there is exactly one timer bar for the whole file, not one per section.
 
 Report the final file path and the per-type, per-tier question-count
 breakdown to the user.
@@ -252,6 +255,16 @@ breakdown to the user.
   it drift out of sync, since a mismatched rules block would describe a
   different rule set than the one that actually generated the questions in
   that section.
+- **One cumulative pacing timer for the whole file, not one per section.**
+  The budget is 75s per question, counted across *all* sections combined
+  (e.g. 5 FS + 5 LS + 5 ME = 15 questions &rarr; 18:45 total, not three
+  separate 6:15 timers) — this mirrors what a real proctored session would
+  time. `generate_mixed.py` calls `fs.render_timer_bar(total)` once (with
+  the file's grand total, computed the same way `type_comp` already is) and
+  pulls in `fs.TIMER_CSS`/`fs.TIMER_JS` alongside the three sibling
+  stylesheets — it does not call each sibling's own `render_timer_bar`. If a
+  new type is ever added to this skill, it only needs to contribute to that
+  one shared total, not bring its own timer bar.
 
 ## Files
 
