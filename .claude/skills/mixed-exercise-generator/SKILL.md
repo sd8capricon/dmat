@@ -92,6 +92,12 @@ unset. Generation cost is just the sum of the three sibling engines' own
 cost, so a few dozen total questions should finish in seconds; if it hangs,
 the problem is in whichever sibling skill owns that type, not in this one.
 
+Add `--ladder` when the user wants an exam-ladder ordering (easiest tier
+first, hardest tier last, across the *whole* file, not just within each
+type) instead of the default type-major grouping — see the "Sections are
+grouped by type by default" constraint below for exactly what this changes
+and does not change.
+
 Leave `--out` unset per Step 2 unless the user named a specific file. If
 you do pass an explicit `--out` and the script refuses because that path
 already exists, that is the intended safety behavior — either drop `--out`
@@ -119,9 +125,10 @@ html = open('<filename>.html').read()
 ids = [int(i) for i in re.findall(r'<section class="item" id="item-(\d+)"', html)]
 assert ids == list(range(1, len(ids) + 1)), ids
 
-# Split into per-type sections in document order.
+# Split into per-type sections in document order (one per type in the
+# default ordering, one per (tier, type) block if generated with --ladder).
 sections = re.findall(
-    r'<section class="type-section">(.*?)</section>\s*(?=(?:<section class="type-section">|</main>))',
+    r'<section class="type-section[^"]*">(.*?)</section>\s*(?=(?:<section class="type-section|</main>))',
     html, re.S)
 def items_in(block):
     return re.findall(r'<section class="item".*?</section>', block, re.S)
@@ -234,13 +241,24 @@ breakdown to the user.
   guard makes the 2nd/3rd listener no-ops on the same click), but it is
   incidental, not a property to depend on. If the three sibling JS
   snippets ever diverge, revisit this — do not just keep concatenating.
-- **Sections are grouped by type (FS, then LS, then ME), not interleaved**,
-  each internally ordered easiest-to-hardest tier, matching every sibling
-  skill's own within-file ordering. If the user asks for interleaved /
-  shuffled ordering instead, that's a real, deliberate feature change —
-  ask for confirmation before extending `build_html`'s section loop into a
-  randomized interleave, since it changes what "Question N" means relative
-  to the sections a user might reference.
+- **Sections are grouped by type (FS, then LS, then ME) by default, not
+  interleaved**, each internally ordered easiest-to-hardest tier, matching
+  every sibling skill's own within-file ordering. Pass `--ladder` for the
+  other supported ordering: tier-major instead of type-major — all Easy
+  questions (across FS, then LS, then ME) first, then all Medium, then all
+  Hard, so difficulty escalates across the *entire* file the way a real
+  proctored block runs, with per-type grouping only preserved *within* each
+  tier. Both orderings reuse the exact same per-(type, tier) item-building
+  code (`build_items_for_tier` in `generate_mixed.py`) and only change the
+  *order* those calls run in and how the resulting blocks are packaged into
+  `<section class="type-section">` elements (one block per type in default
+  mode; one block per (tier, type) pair — with its own repeated title/rules,
+  e.g. "Figure Sequences — Hard" — in ladder mode). Numbering stays
+  continuous either way. A true *interleaved/shuffled* ordering (individual
+  questions of different types mixed within the same tier, not grouped) is
+  still an unbuilt, real feature change — ask for confirmation before
+  extending `build_html`/`main` to support that, since it changes what
+  "Question N" means relative to the sections a user might reference.
 - **Global numbering, not per-type numbering.** Each sibling module's
   `render_item` takes an explicit `idx` argument (never generates its own),
   so `generate_mixed.py` threads a single running counter across all three

@@ -108,14 +108,45 @@ TYPE_META = {
 # own build_item/build_random_item + render_item, only supplying a continuous
 # global index instead of that module's own per-file numbering.
 # ---------------------------------------------------------------------------
+def build_one_fs(rng_module, tier, idx):
+    figs, states = fs.build_random_item(tier, rng_module)
+    return fs.render_item(idx, tier, figs, states)
+
+
+def build_one_ls(rng, tier, idx, seen_signatures):
+    d = ls.build_item(rng, tier, seen_signatures)
+    return ls.render_item(idx, d)
+
+
+def build_one_me(rng, tier, idx):
+    letters, targets, equations, narrative = me.build_item(tier, rng)
+    return me.render_item(idx, tier, letters, targets, equations, narrative, rng)
+
+
+def build_items_for_tier(key, tier, count, rng_arg, start_idx, seen_signatures=None):
+    """Build `count` items of a single (type, tier) pair, threading a
+    continuous idx. Shared by both the default grouped-by-type-only ordering
+    (looped once per tier inside build_fs_items/etc.) and the exam-ladder
+    ordering (called once per (tier, type) block in tier-major order)."""
+    idx = start_idx
+    items = []
+    for _ in range(count):
+        if key == 'fs':
+            items.append(build_one_fs(rng_arg, tier, idx))
+        elif key == 'ls':
+            items.append(build_one_ls(rng_arg, tier, idx, seen_signatures))
+        elif key == 'me':
+            items.append(build_one_me(rng_arg, tier, idx))
+        idx += 1
+    return items, idx
+
+
 def build_fs_items(counts, rng_module, start_idx):
     items_html = []
     idx = start_idx
     for tier in TIERS:
-        for _ in range(counts[tier]):
-            figs, states = fs.build_random_item(tier, rng_module)
-            items_html.append(fs.render_item(idx, tier, figs, states))
-            idx += 1
+        new_items, idx = build_items_for_tier('fs', tier, counts[tier], rng_module, idx)
+        items_html.extend(new_items)
     return items_html, idx
 
 
@@ -124,10 +155,8 @@ def build_ls_items(counts, rng, start_idx):
     idx = start_idx
     seen_signatures = set()
     for tier in TIERS:
-        for _ in range(counts[tier]):
-            d = ls.build_item(rng, tier, seen_signatures)
-            items_html.append(ls.render_item(idx, d))
-            idx += 1
+        new_items, idx = build_items_for_tier('ls', tier, counts[tier], rng, idx, seen_signatures)
+        items_html.extend(new_items)
     return items_html, idx
 
 
@@ -135,10 +164,8 @@ def build_me_items(counts, rng, start_idx):
     items_html = []
     idx = start_idx
     for tier in TIERS:
-        for _ in range(counts[tier]):
-            letters, targets, equations, narrative = me.build_item(tier, rng)
-            items_html.append(me.render_item(idx, tier, letters, targets, equations, narrative, rng))
-            idx += 1
+        new_items, idx = build_items_for_tier('me', tier, counts[tier], rng, idx)
+        items_html.extend(new_items)
     return items_html, idx
 
 
@@ -193,13 +220,20 @@ EXTRA_CSS = '''
 JS = fs.JS + fs.TIMER_JS
 
 
-def render_section(key, counts, items_html):
+def render_section(key, counts, items_html, tier_label=None):
+    """tier_label is None for the default grouped-by-type-only ordering
+    (section spans every tier of that type). In exam-ladder mode, each
+    (tier, type) pair gets its own block, so tier_label names that one tier
+    and `counts` only holds that single tier's count -- the rules/lead text
+    is still copied in full each time, matching this skill's "never
+    paraphrase a sibling's rules" rule regardless of how blocks are sliced."""
     meta = TYPE_META[key]
     comp = ", ".join(f"{counts[t]} {DIFF_LABEL[t]}" for t in TIERS if counts.get(t))
+    title = meta['title'] if tier_label is None else f"{meta['title']} &mdash; {DIFF_LABEL[tier_label]}"
     return f'''
 <section class="type-section type-section-{key}">
   <div class="type-section-header">
-    <h2>{meta['title']}</h2>
+    <h2>{title}</h2>
     <p>{sum(counts.values())} items ({comp}). {meta['lead']}</p>
     <div class="instructions">
       <strong>Rules:</strong>
@@ -211,18 +245,27 @@ def render_section(key, counts, items_html):
 '''
 
 
-def build_html(sections, type_counts):
+def build_html(blocks, type_counts, ladder=False):
+    """`blocks` is an ordered list of (key, tier_label_or_None, counts, items_html)
+    tuples, already in the exact document order to render -- grouped-by-type
+    order for the default mode, tier-major/type-minor order for ladder mode."""
     total = sum(sum(c.values()) for c in type_counts.values())
     type_comp = ", ".join(
         f"{sum(type_counts[k].values())} {TYPE_META[k]['title']}"
-        for k in ('fs', 'ls', 'me') if k in sections
+        for k in ('fs', 'ls', 'me') if k in type_counts and sum(type_counts[k].values())
     )
     css = fs.CSS + ls.CSS + me.CSS + EXTRA_CSS + fs.TIMER_CSS
-    symbols = fs.SYMBOLS if 'fs' in sections else ''
+    symbols = fs.SYMBOLS if 'fs' in type_counts and sum(type_counts['fs'].values()) else ''
     body = "".join(
-        render_section(k, type_counts[k], sections[k])
-        for k in ('fs', 'ls', 'me') if k in sections
+        render_section(key, counts, items_html, tier_label)
+        for key, tier_label, counts, items_html in blocks
     )
+    if ladder:
+        order_note = ("Questions run as an exam ladder: easiest tier first, hardest tier "
+                       "last across the whole set; within each tier, questions are grouped "
+                       "by question type.")
+    else:
+        order_note = "Sections are grouped by question type; within each section, questions run easiest to hardest."
     return f'''<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -236,7 +279,7 @@ def build_html(sections, type_counts):
 {fs.render_timer_bar(total)}
 <header class="page-header">
   <h1>Mixed Practice Set</h1>
-  <p>{total} items ({type_comp}), in the dMAT Core Module format. Sections are grouped by question type; within each section, questions run easiest to hardest.</p>
+  <p>{total} items ({type_comp}), in the dMAT Core Module format. {order_note}</p>
   <div class="instructions">
     <strong>Timer:</strong>
     <ul>
@@ -267,6 +310,11 @@ def main():
     ap.add_argument('--seed', type=int, default=None)
     ap.add_argument('--force', action='store_true',
                      help='Overwrite --out if it already exists instead of refusing.')
+    ap.add_argument('--ladder', action='store_true',
+                     help='Order the whole file tier-major (all Easy across every type, '
+                          'then all Medium, then all Hard) instead of the default '
+                          'type-major grouping. Within each tier, questions are grouped '
+                          'by type in fs/ls/me order.')
     args = ap.parse_args()
 
     type_counts = {
@@ -287,17 +335,29 @@ def main():
         random.seed(args.seed)
     rng = random.Random(args.seed) if args.seed is not None else random.Random()
 
-    sections = {}
     idx = 1
-    for key in ('fs', 'ls', 'me'):
-        counts = type_counts[key]
-        if sum(counts.values()) <= 0:
-            continue
-        rng_arg = random if key == 'fs' else rng
-        items_html, idx = BUILDERS[key](counts, rng_arg, idx)
-        sections[key] = items_html
+    blocks = []
+    seen_signatures = set()  # LS dedup state must persist across tiers in ladder mode too
+    if args.ladder:
+        for tier in TIERS:
+            for key in ('fs', 'ls', 'me'):
+                count = type_counts[key][tier]
+                if count <= 0:
+                    continue
+                rng_arg = random if key == 'fs' else rng
+                items_html, idx = build_items_for_tier(key, tier, count, rng_arg, idx, seen_signatures)
+                blocks.append((key, tier, {tier: count}, items_html))
+    else:
+        for key in ('fs', 'ls', 'me'):
+            counts = type_counts[key]
+            if sum(counts.values()) <= 0:
+                continue
+            rng_arg = random if key == 'fs' else rng
+            items_html, idx = BUILDERS[key](counts, rng_arg, idx)
+            blocks.append((key, None, counts, items_html))
 
-    html = build_html(sections, type_counts)
+    sections = {k: True for k, _, _, _ in blocks}
+    html = build_html(blocks, type_counts, ladder=args.ladder)
 
     if args.out:
         out_path = args.out
